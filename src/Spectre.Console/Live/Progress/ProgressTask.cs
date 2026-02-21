@@ -119,7 +119,7 @@ public sealed class ProgressTask : IProgress<double>
     /// <param name="autoStart">Whether or not the task should start automatically.</param>
     public ProgressTask(int id, string description, double maxValue, bool autoStart = true)
     {
-        lazySamples = new(() => new CircularBuffer<ProgressSample>(MaxSamplesKept));
+        lazySamples = new(() => new CircularBuffer<ProgressSample>(MaxSamplesKept) { UniqueRemovedCheck = false });
         _lock = new object();
         _maxValue = maxValue;
         _value = 0;
@@ -255,18 +255,48 @@ public sealed class ProgressTask : IProgress<double>
         return percentage;
     }
 
+    /// <summary>
+    /// Gets or Sets When we calculate speed we only use the timespan containing the sampled range normally.  This sets the max age for the oldest sample before we treat now as its sample time.
+    /// </summary>
+    public TimeSpan MaxTimeForSpeedCache { get; set; } = TimeSpan.FromSeconds(1);
+    private DateTime _lastSpeedCalculation = DateTime.MinValue;
+    public void DumpTask(){
+        Debug.WriteLine($"Task Id: {Id}");
+        Debug.WriteLine($"Description: {Description}");
+        Debug.WriteLine($"MaxValue: {MaxValue}");
+        Debug.WriteLine($"Value: {Value}");
+        Debug.WriteLine($"StartTime: {StartTime}");
+        Debug.WriteLine($"StopTime: {StopTime}");
+        Debug.WriteLine($"IsStarted: {IsStarted}");
+        Debug.WriteLine($"IsFinished: {IsFinished}");
+        Debug.WriteLine($"Percentage: {Percentage}");
+        Debug.WriteLine($"Speed: {Speed}");
+        Debug.WriteLine($"ElapsedTime: {ElapsedTime}");
+        Debug.WriteLine($"RemainingTime: {RemainingTime}");
+        Debug.WriteLine($"IsIndeterminate: {IsIndeterminate}");
+        Debug.WriteLine($"Buffer:");
+        lock (_lock)
+        {
+            foreach (var sample in Samples)
+            {
+                Debug.WriteLine($"  Timestamp: {sample.Timestamp}, Value: {sample.Value}");
+            }
+        }
+    }
     private double? GetSpeed()
     {
-        if (!samplesChanged || StartTime == null || !lazySamples.IsValueCreated || Samples.Count == 0 || StopTime != null)
+        var now = DateTime.Now;
+        if ((!samplesChanged && (now - _lastSpeedCalculation) < MaxTimeForSpeedCache) || StartTime == null || !lazySamples.IsValueCreated || Samples.Count == 0 || StopTime != null)
         {
             return _cachedLastSpeed;
         }
 
+        _lastSpeedCalculation = now;
         samplesChanged = false;
 
         lock (_lock)
         {
-            var threshold = DateTime.Now - MaxSamplingAge;
+            var threshold = now - MaxSamplingAge;
             var validSamples = Samples.Where(a => a.Timestamp >= threshold);
             var first = validSamples.FirstOrDefault();
             if (first.Equals(default(ProgressSample)))
@@ -274,7 +304,16 @@ public sealed class ProgressTask : IProgress<double>
                 return _cachedLastSpeed = null;
             }
 
-            var totalTime = Samples[Samples.Count - 1].Timestamp - first.Timestamp; // circular buffer automatically rotates index so length is newest and 0 is oldest, we
+            var newestSampleTime = Samples[Samples.Count - 1].Timestamp;
+            if (StopTime == null)
+            {
+                if (now - newestSampleTime > MaxTimeForSpeedCache)
+                {
+                    newestSampleTime = now;
+                }
+            }
+
+            var totalTime = newestSampleTime - first.Timestamp; // circular buffer automatically rotates index so length is newest and 0 is oldest, we
             if (totalTime == TimeSpan.Zero)
             {
                 return _cachedLastSpeed = null;

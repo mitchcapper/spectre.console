@@ -7,13 +7,23 @@
 #pragma warning disable SA1515 // Single-line comment should be preceded by blank line
 #pragma warning disable SA1028 // Code should not contain trailing whitespace
 #pragma warning disable SA1401 // Field should be private
+#pragma warning disable SA1503 // Field should be private
+#pragma warning disable SA1513 // Field should be private
+#pragma warning disable CS1591
+#pragma warning disable SA1507 // Field should be private
+#pragma warning disable SA1618 // Field should be private
+#pragma warning disable SA1623 // Field should be private
+#pragma warning disable SA1600 // Field should be private
 #pragma warning disable SA1128 // Put constructor initializers on their own line
 #pragma warning disable RCS1079 // Implement the functionality instead of throwing new NotImplementedException
 
 // This was taken from https://github.com/dotnet/aspire/blob/a99edf17f50cbd2717f708706448e33a53825476/src/Shared/CircularBuffer.cs its license is also MIT.  This is the same exact circularbuffer that VS uses in Microsoft.VisualStudio.Utilities (at least a cursory decompiling shows it to be such): https://learn.microsoft.com/en-us/dotnet/api/microsoft.visualstudio.utilities.circularbuffer-1?view=visualstudiosdk-2022. Minor fix for .netstandard 2.0 
 
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace Spectre.Console;
@@ -24,7 +34,7 @@ namespace Spectre.Console;
 /// </summary>
 [DebuggerDisplay("Count = {Count}")]
 [DebuggerTypeProxy(typeof(CircularBuffer<>.CircularBufferDebugView))]
-internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<T>, IEnumerable
+public sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<T>, IEnumerable
 {
     // Internal for testing.
     internal readonly List<T> _buffer;
@@ -32,6 +42,7 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
     internal int _end;
 
     public event Action<T>? ItemRemovedForCapacity;
+
 
     public CircularBuffer(int capacity) : this(new List<T>(), capacity, start: 0, end: 0)
     {
@@ -48,7 +59,13 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
         Capacity = capacity;
         _start = start;
         _end = end;
+        UniqueRemovedCheck = !typeof(T).IsValueType;
     }
+
+    /// <summary>
+    /// We have some debug.asserts to make sure items removed do not still appear in the buffer, but valuetypes can have equal items (or you may want to insert multiple copies of the same instance.  This is automatically set to false for valuetypes but you can override.
+    /// </summary>
+    public bool UniqueRemovedCheck { get; set; } = true;
 
     public int Capacity { get; }
 
@@ -140,7 +157,10 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             Increment(ref _end);
             _start = _end;
 
-            Debug.Assert(!_buffer.Contains(removedItem), "Item was not correctly removed.");
+            if (UniqueRemovedCheck)
+            {
+                Debug.Assert(!_buffer.Contains(removedItem), "Item was not correctly removed.");
+            }
             ItemRemovedForCapacity?.Invoke(removedItem);
         }
         else
@@ -212,8 +232,10 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             _buffer[_end] = item;
             Increment(ref _end);
             _start = _end;
-
-            Debug.Assert(!_buffer.Contains(removedItem), "Item was not correctly removed.");
+            if (UniqueRemovedCheck)
+            {
+                Debug.Assert(!_buffer.Contains(removedItem), "Item was not correctly removed.");
+            }
             ItemRemovedForCapacity?.Invoke(removedItem);
         }
         else
