@@ -7,17 +7,16 @@
 #pragma warning disable SA1515 // Single-line comment should be preceded by blank line
 #pragma warning disable SA1028 // Code should not contain trailing whitespace
 #pragma warning disable SA1401 // Field should be private
-#pragma warning disable SA1503 // Field should be private
-#pragma warning disable SA1513 // Field should be private
-#pragma warning disable CS1591
-#pragma warning disable SA1507 // Field should be private
-#pragma warning disable SA1618 // Field should be private
-#pragma warning disable SA1623 // Field should be private
-#pragma warning disable SA1600 // Field should be private
+#pragma warning disable SA1503 // Braces should not be omitted
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
+#pragma warning disable SA1507 // Code should not contain multiple blank lines in a row
+#pragma warning disable SA1618 // Generic type parameters should be documented
+#pragma warning disable SA1623 // Property summary documentation should match accessors
+#pragma warning disable SA1600 // Elements should be documented
 #pragma warning disable SA1128 // Put constructor initializers on their own line
 #pragma warning disable RCS1079 // Implement the functionality instead of throwing new NotImplementedException
 
-// This was taken from https://github.com/dotnet/aspire/blob/a99edf17f50cbd2717f708706448e33a53825476/src/Shared/CircularBuffer.cs its license is also MIT.  This is the same exact circularbuffer that VS uses in Microsoft.VisualStudio.Utilities (at least a cursory decompiling shows it to be such): https://learn.microsoft.com/en-us/dotnet/api/microsoft.visualstudio.utilities.circularbuffer-1?view=visualstudiosdk-2022. Minor fix for .netstandard 2.0 
+// This was taken from https://github.com/dotnet/aspire/blob/a99edf17f50cbd2717f708706448e33a53825476/src/Shared/CircularBuffer.cs its license is also MIT.  This is the same exact circularbuffer that VS uses in Microsoft.VisualStudio.Utilities (at least a cursory decompiling shows it to be such): https://learn.microsoft.com/en-us/dotnet/api/microsoft.visualstudio.utilities.circularbuffer-1?view=visualstudiosdk-2022. Minor fix for .netstandard 2.0
 
 using System;
 using System.Collections;
@@ -314,12 +313,7 @@ public sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<T>
 
     private void Decrement(ref int index)
     {
-        if (index <= 0)
-        {
-            index = Capacity - 1;
-        }
-
-        --index;
+        index = (index <= 0) ? Capacity - 1 : index - 1;
     }
 
     public CircularBuffer<T> Clone()

@@ -260,7 +260,12 @@ public sealed class ProgressTask : IProgress<double>
     /// </summary>
     public TimeSpan MaxTimeForSpeedCache { get; set; } = TimeSpan.FromSeconds(1);
     private DateTime _lastSpeedCalculation = DateTime.MinValue;
-    public void DumpTask(){
+    /// <summary>
+    /// Dumps the task state to Debug output for diagnostics.
+    /// </summary>
+    [Conditional("DEBUG")]
+    public void DumpTask()
+    {
         Debug.WriteLine($"Task Id: {Id}");
         Debug.WriteLine($"Description: {Description}");
         Debug.WriteLine($"MaxValue: {MaxValue}");
@@ -286,24 +291,29 @@ public sealed class ProgressTask : IProgress<double>
     private double? GetSpeed()
     {
         var now = DateTime.Now;
-        if ((!samplesChanged && (now - _lastSpeedCalculation) < MaxTimeForSpeedCache) || StartTime == null || !lazySamples.IsValueCreated || Samples.Count == 0 || StopTime != null)
+        if (!samplesChanged && (now - _lastSpeedCalculation) < MaxTimeForSpeedCache)
         {
             return _cachedLastSpeed;
         }
 
-        _lastSpeedCalculation = now;
-        samplesChanged = false;
-
         lock (_lock)
         {
+            if (StartTime == null || !lazySamples.IsValueCreated || Samples.Count == 0 || StopTime != null)
+            {
+                return _cachedLastSpeed;
+            }
+
+            _lastSpeedCalculation = now;
+            samplesChanged = false;
+
             var threshold = now - MaxSamplingAge;
-            var validSamples = Samples.Where(a => a.Timestamp >= threshold);
-            var first = validSamples.FirstOrDefault();
-            if (first.Equals(default(ProgressSample)))
+            var validSamples = Samples.Where(a => a.Timestamp >= threshold).ToList();
+            if (validSamples.Count == 0)
             {
                 return _cachedLastSpeed = null;
             }
 
+            var first = validSamples[0];
             var newestSampleTime = Samples[Samples.Count - 1].Timestamp;
             if (StopTime == null)
             {
@@ -313,7 +323,7 @@ public sealed class ProgressTask : IProgress<double>
                 }
             }
 
-            var totalTime = newestSampleTime - first.Timestamp; // circular buffer automatically rotates index so length is newest and 0 is oldest, we
+            var totalTime = newestSampleTime - first.Timestamp;
             if (totalTime == TimeSpan.Zero)
             {
                 return _cachedLastSpeed = null;
